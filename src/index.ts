@@ -9,6 +9,7 @@ import { UserResolver } from "./resolvers/User";
 import { DataSource } from "typeorm";
 import { User } from "./entities/User";
 
+// TODO: work with redis tomorrow alreay installed.
 const main = async () => {
   const AppDataSource = new DataSource({
     type: "postgres",
