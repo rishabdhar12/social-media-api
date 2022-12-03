@@ -1,7 +1,4 @@
-// import { MikroORM } from "@mikro-orm/core";
-// import mikroOrmConfig from "./mikro-orm.config";
 import express from "express";
-// import { PostgreSqlDriver } from "@mikro-orm/postgresql";
 import { ApolloServer } from "apollo-server-express";
 import { buildSchema } from "type-graphql";
 import { MyContext } from "./types";
@@ -9,7 +6,11 @@ import { UserResolver } from "./resolvers/User";
 import { DataSource } from "typeorm";
 import { User } from "./entities/User";
 
-// TODO: work with redis tomorrow alreay installed.
+import connectRedis from "connect-redis";
+import session from "express-session";
+import Redis from "ioredis";
+import { __prod__ } from "./constants";
+
 const main = async () => {
   const AppDataSource = new DataSource({
     type: "postgres",
@@ -31,14 +32,29 @@ const main = async () => {
       console.error("Error during Data Source initialization", err);
     });
 
-  // const orm = await MikroORM.init<PostgreSqlDriver>(mikroOrmConfig);
-
-  // await orm.getMigrator().up();
-
-  //   const user = orm.em.fork().create(User, { name: "rishab" });
-  //   await orm.em.fork().persistAndFlush(user);
-
   const app = express();
+
+  // redis
+  const RedisStore = connectRedis(session);
+  const redis = new Redis();
+
+  app.use(
+    session({
+      name: "qid",
+      store: new RedisStore({
+        client: redis,
+      }),
+      cookie: {
+        maxAge: 1000 * 60 * 60 * 24 * 365 * 10, // 10 years
+        httpOnly: true,
+        sameSite: "none", // csrf
+        secure: __prod__, // cookie only works in https
+      },
+      saveUninitialized: false,
+      secret: "lsDjf&&*)dsOgh85_(&",
+      resave: false,
+    })
+  );
 
   // type graphql schema
   const apolloServer = new ApolloServer({

@@ -1,9 +1,21 @@
 import { Arg, Mutation, Resolver, Query } from "type-graphql";
 import { User } from "../entities/User";
 import argon2 from "argon2";
+import Redis from "ioredis";
+const redis = new Redis();
+
 @Resolver()
 export class UserResolver {
-  // query to find user by username typeorm
+  // me query
+  @Query(() => User, { nullable: true })
+  async me(): Promise<User | null> {
+    const userId = await redis.get("login");
+    if (userId === null) {
+      return null;
+    }
+    return await User.findOne({ where: { id: parseInt(userId) } });
+  }
+
   @Query(() => User, { nullable: true })
   async findUserByUsername(
     @Arg("username") username: string
@@ -27,7 +39,7 @@ export class UserResolver {
       throw new Error("Username already exists");
     } else {
       const hashedPassword = await argon2.hash(password);
-      return await User.create({
+      const user = User.create({
         name,
         username,
         email,
@@ -38,7 +50,8 @@ export class UserResolver {
         friendRequestsSent: [],
         friendRequestsReceived: [],
         blocked: [],
-      }).save();
+      });
+      return user.save();
     }
   }
 
@@ -57,6 +70,8 @@ export class UserResolver {
       if (!valid) {
         throw new Error("Incorrect password");
       }
+      await redis.set("login", user.id!.toString());
+      // console.log(await redis.get("login"));
       return user;
     } else {
       throw new Error("Please fill in all fields");
@@ -67,8 +82,60 @@ export class UserResolver {
   @Query(() => User, { nullable: true })
   async getUserById(@Arg("id") id: number): Promise<User | null> {
     if (id === null) {
+      throw new Error("Enter a valid id");
+    }
+
+    const user = await User.findOne({ where: { id } });
+    if (!user) {
+      throw new Error("User does not exist");
+    } else {
+      return user;
+    }
+  }
+
+  // update user
+  @Mutation(() => User)
+  async updateUser(
+    @Arg("id") id: number,
+    @Arg("name") name: string
+  ): Promise<User | undefined> {
+    const user = await User.findOne({ where: { id } });
+    if (!user) {
       throw new Error("User does not exist");
     }
-    return await User.findOne({ where: { id } });
+    await User.update({ id }, { name });
+    return user;
+  }
+
+  // delete user only if admin
+  @Mutation(() => Boolean)
+  async deleteUser(@Arg("id") id: number): Promise<Boolean> {
+    const user = await User.findOne({ where: { id } });
+    if (!user) {
+      throw new Error("User does not exist");
+    }
+    // if (id.toString() === (await redis.get("login"))) {
+    //   throw new Error("You cannot delete your own account");
+    // }
+    if (user.isAdmin === true) {
+      await User.delete({ id });
+      return true;
+    } else {
+      return false;
+      // throw new Error("You are not an admin");
+    }
+  }
+
+  // get all users
+  @Query(() => [User])
+  async getAllUsers(): Promise<User[]> {
+    return await User.find();
+  }
+
+  // logout
+  @Mutation(() => Boolean)
+  async logout(): Promise<Boolean> {
+    await redis.del("login");
+    return true;
   }
 }
