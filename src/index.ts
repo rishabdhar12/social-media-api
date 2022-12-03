@@ -2,7 +2,8 @@ import express from "express";
 import { ApolloServer } from "apollo-server-express";
 import { buildSchema } from "type-graphql";
 import { MyContext } from "./types";
-import { UserResolver } from "./resolvers/User";
+import { UserAuthResolver } from "./resolvers/user_auth";
+import { UserResolver } from "./resolvers/user";
 import { DataSource } from "typeorm";
 import { User } from "./entities/User";
 
@@ -59,7 +60,7 @@ const main = async () => {
   // type graphql schema
   const apolloServer = new ApolloServer({
     schema: await buildSchema({
-      resolvers: [UserResolver],
+      resolvers: [UserAuthResolver, UserResolver],
       validate: false,
     }),
     context: ({ req, res }): MyContext => ({

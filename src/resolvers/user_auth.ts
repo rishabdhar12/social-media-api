@@ -5,7 +5,7 @@ import Redis from "ioredis";
 const redis = new Redis();
 
 @Resolver()
-export class UserResolver {
+export class UserAuthResolver {
   // me query
   @Query(() => User, { nullable: true })
   async me(): Promise<User | null> {
@@ -14,13 +14,6 @@ export class UserResolver {
       return null;
     }
     return await User.findOne({ where: { id: parseInt(userId) } });
-  }
-
-  @Query(() => User, { nullable: true })
-  async findUserByUsername(
-    @Arg("username") username: string
-  ): Promise<User | null> {
-    return await User.findOne({ where: { username } });
   }
 
   // registration
@@ -78,64 +71,36 @@ export class UserResolver {
     }
   }
 
-  // get user by id
-  @Query(() => User, { nullable: true })
-  async getUserById(@Arg("id") id: number): Promise<User | null> {
-    if (id === null) {
-      throw new Error("Enter a valid id");
-    }
-
-    const user = await User.findOne({ where: { id } });
-    if (!user) {
-      throw new Error("User does not exist");
-    } else {
-      return user;
-    }
-  }
-
-  // update user
-  @Mutation(() => User)
-  async updateUser(
-    @Arg("id") id: number,
-    @Arg("name") name: string
-  ): Promise<User | undefined> {
-    const user = await User.findOne({ where: { id } });
-    if (!user) {
-      throw new Error("User does not exist");
-    }
-    await User.update({ id }, { name });
-    return user;
-  }
-
-  // delete user only if admin
-  @Mutation(() => Boolean)
-  async deleteUser(@Arg("id") id: number): Promise<Boolean> {
-    const user = await User.findOne({ where: { id } });
-    if (!user) {
-      throw new Error("User does not exist");
-    }
-    // if (id.toString() === (await redis.get("login"))) {
-    //   throw new Error("You cannot delete your own account");
-    // }
-    if (user.isAdmin === true) {
-      await User.delete({ id });
-      return true;
-    } else {
-      return false;
-      // throw new Error("You are not an admin");
-    }
-  }
-
-  // get all users
-  @Query(() => [User])
-  async getAllUsers(): Promise<User[]> {
-    return await User.find();
-  }
-
   // logout
   @Mutation(() => Boolean)
   async logout(): Promise<Boolean> {
     await redis.del("login");
     return true;
   }
+
+  // change password
+  @Mutation(() => User)
+  async changePassword(
+    @Arg("oldPassword") oldPassword: string,
+    @Arg("newPassword") newPassword: string
+  ): Promise<User | undefined> {
+    const userId = await redis.get("login");
+    if (userId === null) {
+      throw new Error("You are not logged in");
+    }
+    const user = await User.findOne({ where: { id: parseInt(userId) } });
+    if (!user) {
+      throw new Error("User does not exist");
+    }
+    const valid = await argon2.verify(user.password, oldPassword);
+    if (!valid) {
+      throw new Error("Incorrect password");
+    }
+    const hashedPassword = await argon2.hash(newPassword);
+    await User.update({ id: parseInt(userId) }, { password: hashedPassword });
+    return user;
+  }
 }
+
+// forgot password (not implemented)
+// login with mobile number and otp (not implemented)
