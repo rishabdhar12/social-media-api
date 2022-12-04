@@ -1,71 +1,9 @@
-import { User } from "../entities/User";
-import { Query, Arg, Mutation } from "type-graphql";
+import { User } from "src/entities/User";
+import { Mutation, Arg, Query } from "type-graphql";
 import Redis from "ioredis";
 const redis = new Redis();
 
-export class UserResolver {
-  // get user by id
-  @Query(() => User, { nullable: true })
-  async getUserById(@Arg("id") id: number): Promise<User | null> {
-    if (id === null) {
-      throw new Error("Enter a valid id");
-    }
-
-    const user = await User.findOne({ where: { id } });
-    if (!user) {
-      throw new Error("User does not exist");
-    } else {
-      return user;
-    }
-  }
-
-  // update user
-  @Mutation(() => User)
-  async updateUser(
-    @Arg("id") id: number,
-    @Arg("name") name: string
-  ): Promise<User | undefined> {
-    const user = await User.findOne({ where: { id } });
-    if (!user) {
-      throw new Error("User does not exist");
-    }
-    await User.update({ id }, { name });
-    return user;
-  }
-
-  // delete user only if admin
-  @Mutation(() => Boolean)
-  async deleteUser(@Arg("id") id: number): Promise<Boolean> {
-    const user = await User.findOne({ where: { id } });
-    if (!user) {
-      throw new Error("User does not exist");
-    }
-    // if (id.toString() === (await redis.get("login"))) {
-    // throw new Error("You cannot delete your own account");
-    // }
-    if (user.isAdmin === true) {
-      await User.delete({ id });
-      return true;
-    } else {
-      return false;
-      // throw new Error("You are not an admin");
-    }
-  }
-
-  // get all users
-  @Query(() => [User])
-  async getAllUsers(): Promise<User[]> {
-    return await User.find();
-  }
-
-  // find user by username
-  @Query(() => User, { nullable: true })
-  async findUserByUsername(
-    @Arg("username") username: string
-  ): Promise<User | null> {
-    return await User.findOne({ where: { username } });
-  }
-
+export class UserActivityResolver {
   // follow user
   @Mutation(() => User)
   async followUser(@Arg("id") id: number): Promise<User | undefined> {
@@ -233,6 +171,7 @@ export class UserResolver {
 
     return await Promise.all(friendRequestsReceived as any);
   }
+
   // accept friend request
   @Mutation(() => User)
   async acceptFriendRequest(@Arg("id") id: number): Promise<User | null> {
@@ -258,7 +197,7 @@ export class UserResolver {
       throw new Error("You are already friends with this user");
     }
     if (currentUser.friendRequestsSent?.includes(id.toString())) {
-      throw new Error("You are already sent friend request to this user.");
+      throw new Error("You already sent friend request to this user.");
     }
     if (currentUser.friendRequestsReceived?.includes(id.toString())) {
       const index = currentUser.friendRequestsReceived?.indexOf(id.toString());
@@ -266,12 +205,14 @@ export class UserResolver {
         currentUser.friends?.push(id.toString());
         currentUser.friendRequestsReceived?.splice(index, 1);
         currentUser.totalFriends! += 1;
+        currentUser.followers?.push(id.toString());
       }
       const index2 = user.friendRequestsSent?.indexOf(userId.toString());
       if (index2 !== undefined) {
         user.friends?.push(userId.toString());
         user.friendRequestsSent?.splice(index2, 1);
         user.totalFriends! += 1;
+        user.following?.push(userId.toString());
       }
       await User.update(
         { id },
@@ -279,6 +220,7 @@ export class UserResolver {
           friends: user.friends,
           friendRequestsSent: user.friendRequestsSent,
           totalFriends: user.totalFriends,
+          following: user.following,
         }
       );
       await User.update(
@@ -287,6 +229,53 @@ export class UserResolver {
           friends: currentUser.friends,
           friendRequestsReceived: currentUser.friendRequestsReceived,
           totalFriends: currentUser.totalFriends,
+          followers: currentUser.followers,
+        }
+      );
+    } else {
+      throw new Error("Already accepted request");
+    }
+    return user;
+  }
+
+  // reject friend request
+  @Mutation(() => User)
+  async rejectFriendRequest(@Arg("id") id: number): Promise<User | null> {
+    const user = await User.findOne({ where: { id } });
+    if (!user) {
+      throw new Error("User does not exist");
+    }
+    const userId = await redis.get("login");
+    if (userId === null) {
+      throw new Error("You are not logged in");
+    }
+    const currentUser = await User.findOne({ where: { id: parseInt(userId) } });
+    if (!currentUser) {
+      throw new Error("User does not exist");
+    }
+    if (currentUser.friendRequestsReceived?.includes(id.toString())) {
+      const index = currentUser.friendRequestsReceived?.indexOf(id.toString());
+      if (index !== undefined) {
+        currentUser.friendRequestsReceived?.splice(index, 1);
+        currentUser.followers?.splice(index, 1);
+      }
+      const index2 = user.friendRequestsSent?.indexOf(userId.toString());
+      if (index2 !== undefined) {
+        user.friendRequestsSent?.splice(index2, 1);
+        user.following?.splice(index2, 1);
+      }
+      await User.update(
+        { id },
+        {
+          friendRequestsSent: user.friendRequestsSent,
+          following: user.following,
+        }
+      );
+      await User.update(
+        { id: parseInt(userId) },
+        {
+          friendRequestsReceived: currentUser.friendRequestsReceived,
+          followers: currentUser.followers,
         }
       );
     } else {
@@ -315,4 +304,141 @@ export class UserResolver {
 
     return await Promise.all(friends as any);
   }
+
+  // block user
+  @Mutation(() => User)
+  async blockUser(@Arg("id") id: number) {
+    const userId = await redis.get("login");
+    if (!userId) {
+      throw new Error("You are not logged in");
+    }
+    const currentUser = await User.findOne({ where: { id: parseInt(userId) } });
+    if (!currentUser) {
+      throw new Error("User doesn't exist");
+    }
+    // remove from friend request sent
+    if (currentUser.friendRequestsSent?.includes(id.toString())) {
+      const index = currentUser.friendRequestsSent?.indexOf(id.toString());
+      if (index !== undefined) {
+        currentUser.friendRequestsSent?.splice(index, 1);
+      }
+    }
+
+    // remove from friend request received
+    if (currentUser.friendRequestsReceived?.includes(id.toString())) {
+      const index = currentUser.friendRequestsReceived?.indexOf(id.toString());
+      if (index !== undefined) {
+        currentUser.friendRequestsReceived?.splice(index, 1);
+      }
+    }
+    // add to blocked user list
+    currentUser.blocked?.push(id.toString());
+    await User.update(
+      { id: parseInt(userId) },
+      {
+        friendRequestsReceived: currentUser.friendRequestsReceived,
+        friendRequestsSent: currentUser.friendRequestsSent,
+        blocked: currentUser.blocked,
+        // followers: currentUser.followers,
+        // following: currentUser.following,
+      }
+    );
+    return currentUser;
+  }
+
+  // unblock user
+  @Mutation(() => User)
+  async unblockUser(@Arg("id") id: number) {
+    const userId = await redis.get("login");
+    if (!userId) {
+      throw new Error("You are not logged in");
+    }
+    const currentUser = await User.findOne({ where: { id: parseInt(userId) } });
+    if (!currentUser) {
+      throw new Error("User doesn't exist");
+    }
+
+    // remove from blocked user list
+    if (currentUser.blocked?.includes(id.toString())) {
+      const index = currentUser.blocked?.indexOf(id.toString());
+      if (index !== undefined) {
+        currentUser.blocked?.splice(index, 1);
+      }
+    }
+    await User.update(
+      { id: parseInt(userId) },
+      {
+        blocked: currentUser.blocked,
+      }
+    );
+    return currentUser;
+  }
+
+  // show blocked user list
+  @Query(() => [User], { nullable: true })
+  async showBlockedUsers() {
+    const userId = await redis.get("login");
+    if (userId === null) {
+      throw new Error("You aren't logged in");
+    }
+    const user = await User.findOne({ where: { id: parseInt(userId) } });
+    if (!user) {
+      throw new Error("User ddoesn't exist");
+    }
+    const blockedUsers =
+      user.blocked?.map(async (blockedId) => {
+        return await User.findOne({ where: { id: parseInt(blockedId) } });
+      }) || [];
+    return Promise.all(blockedUsers as any);
+  }
+
+  @Mutation(() => User)
+  async muteUser(@Arg("id") id: number) {
+    const userId = await redis.get("login");
+    if (!userId) {
+      throw new Error("You are not logged in");
+    }
+    const currentUser = await User.findOne({ where: { id: parseInt(userId) } });
+    if (!currentUser) {
+      throw new Error("User doesn't exist");
+    }
+    currentUser.muted?.push(id.toString());
+    await User.update(
+      { id: parseInt(userId) },
+      {
+        muted: currentUser.muted,
+      }
+    );
+    return currentUser;
+  }
+
+  // unmute user
+  @Mutation(() => User)
+  async unmuteUser(@Arg("id") id: number) {
+    const userId = await redis.get("login");
+    if (!userId) {
+      throw new Error("You are not logged in");
+    }
+    const currentUser = await User.findOne({ where: { id: parseInt(userId) } });
+    if (!currentUser) {
+      throw new Error("User doesn't exist");
+    }
+
+    // remove from muted user list
+    if (currentUser.muted?.includes(id.toString())) {
+      const index = currentUser.muted?.indexOf(id.toString());
+      if (index !== undefined) {
+        currentUser.muted?.splice(index, 1);
+      }
+    }
+    await User.update(
+      { id: parseInt(userId) },
+      {
+        muted: currentUser.muted,
+      }
+    );
+    return currentUser;
+  }
+
+  // TODO: Deactivate, Filtering, Searching tomorrow.
 }

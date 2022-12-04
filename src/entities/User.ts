@@ -74,4 +74,8 @@ export class User extends BaseEntity {
   @Field(() => [String])
   @Column("simple-array", { nullable: true })
   blocked?: string[];
+
+  @Field(() => [String])
+  @Column("simple-array", { nullable: true })
+  muted?: string[];
 }
