@@ -233,6 +233,86 @@ export class UserResolver {
 
     return await Promise.all(friendRequestsReceived as any);
   }
+  // accept friend request
+  @Mutation(() => User)
+  async acceptFriendRequest(@Arg("id") id: number): Promise<User | null> {
+    const user = await User.findOne({ where: { id } });
+    if (!user) {
+      throw new Error("User does not exist");
+    }
+    const userId = await redis.get("login");
+    if (userId === null) {
+      throw new Error("You are not logged in");
+    }
+    const currentUser = await User.findOne({ where: { id: parseInt(userId) } });
+    if (!currentUser) {
+      throw new Error("User does not exist");
+    }
+    if (userId === id.toString()) {
+      throw new Error("Cannot request yourself");
+    }
+    if (user.blocked?.includes(user.id!.toString())) {
+      throw new Error("You are blocked by this user");
+    }
+    if (user.friends?.includes(user.id!.toString())) {
+      throw new Error("You are already friends with this user");
+    }
+    if (currentUser.friendRequestsSent?.includes(id.toString())) {
+      throw new Error("You are already sent friend request to this user.");
+    }
+    if (currentUser.friendRequestsReceived?.includes(id.toString())) {
+      const index = currentUser.friendRequestsReceived?.indexOf(id.toString());
+      if (index !== undefined) {
+        currentUser.friends?.push(id.toString());
+        currentUser.friendRequestsReceived?.splice(index, 1);
+        currentUser.totalFriends! += 1;
+      }
+      const index2 = user.friendRequestsSent?.indexOf(userId.toString());
+      if (index2 !== undefined) {
+        user.friends?.push(userId.toString());
+        user.friendRequestsSent?.splice(index2, 1);
+        user.totalFriends! += 1;
+      }
+      await User.update(
+        { id },
+        {
+          friends: user.friends,
+          friendRequestsSent: user.friendRequestsSent,
+          totalFriends: user.totalFriends,
+        }
+      );
+      await User.update(
+        { id: parseInt(userId) },
+        {
+          friends: currentUser.friends,
+          friendRequestsReceived: currentUser.friendRequestsReceived,
+          totalFriends: currentUser.totalFriends,
+        }
+      );
+    } else {
+      throw new Error("Already accepted request");
+    }
+    return user;
+  }
 
-  // TODO: friend request accept and friends count
+  // show friends
+  @Query(() => [User], { nullable: true })
+  async showFriends(): Promise<User[]> {
+    const userId = await redis.get("login");
+    if (userId === null) {
+      throw new Error("You aren't logged in");
+    }
+    const user = await User.findOne({ where: { id: parseInt(userId) } });
+    if (!user) {
+      throw new Error("User does not exist");
+    }
+    const friends =
+      user.friends?.map(async (friend) => {
+        return await User.findOne({
+          where: { id: parseInt(friend) },
+        });
+      }) || [];
+
+    return await Promise.all(friends as any);
+  }
 }
