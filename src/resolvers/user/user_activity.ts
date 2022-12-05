@@ -1,4 +1,4 @@
-import { User } from "src/entities/User";
+import { User } from "../../entities/User"; 
 import { Mutation, Arg, Query } from "type-graphql";
 import Redis from "ioredis";
 const redis = new Redis();
@@ -33,10 +33,10 @@ export class UserActivityResolver {
     }
     if (currentUser.following?.includes(id.toString())) {
       currentUser.following = currentUser.following.filter(
-        (followingId) => followingId !== id.toString()
+        (followingId: string) => followingId !== id.toString()
       );
       user.followers = user.followers?.filter(
-        (followerId) => followerId !== userId
+        (followerId: string) => followerId !== userId
       );
     } else {
       currentUser.following?.push(id.toString());
@@ -62,7 +62,7 @@ export class UserActivityResolver {
       throw new Error("User does not exist");
     }
     const following =
-      user.following?.map(async (followingId) => {
+      user.following?.map(async (followingId: string) => {
         return await User.findOne({ where: { id: parseInt(followingId) } });
       }) || [];
 
@@ -81,7 +81,7 @@ export class UserActivityResolver {
       throw new Error("User does not exist");
     }
     const followers =
-      user.followers?.map(async (followerId) => {
+      user.followers?.map(async (followerId: string) => {
         return await User.findOne({ where: { id: parseInt(followerId) } });
       }) || [];
 
@@ -144,7 +144,7 @@ export class UserActivityResolver {
       throw new Error("User does not exist");
     }
     const friendRequestsSent =
-      user.friendRequestsSent?.map(async (friendRequestId) => {
+      user.friendRequestsSent?.map(async (friendRequestId: string) => {
         return await User.findOne({ where: { id: parseInt(friendRequestId) } });
       }) || [];
 
@@ -163,7 +163,7 @@ export class UserActivityResolver {
       throw new Error("User does not exist");
     }
     const friendRequestsReceived =
-      user.friendRequestsReceived?.map(async (friendRequestsReceivedId) => {
+      user.friendRequestsReceived?.map(async (friendRequestsReceivedId: string) => {
         return await User.findOne({
           where: { id: parseInt(friendRequestsReceivedId) },
         });
@@ -296,7 +296,7 @@ export class UserActivityResolver {
       throw new Error("User does not exist");
     }
     const friends =
-      user.friends?.map(async (friend) => {
+      user.friends?.map(async (friend: string) => {
         return await User.findOne({
           where: { id: parseInt(friend) },
         });
@@ -386,12 +386,13 @@ export class UserActivityResolver {
       throw new Error("User ddoesn't exist");
     }
     const blockedUsers =
-      user.blocked?.map(async (blockedId) => {
+      user.blocked?.map(async (blockedId: string) => {
         return await User.findOne({ where: { id: parseInt(blockedId) } });
       }) || [];
     return Promise.all(blockedUsers as any);
   }
 
+  // mute user
   @Mutation(() => User)
   async muteUser(@Arg("id") id: number) {
     const userId = await redis.get("login");
@@ -410,6 +411,24 @@ export class UserActivityResolver {
       }
     );
     return currentUser;
+  }
+
+  // show muted users
+  @Query(() => [User], { nullable: true })
+  async showMutedUsers() {
+    const userId = await redis.get("login");
+    if (userId === null) {
+      throw new Error("You aren't logged in");
+    }
+    const user = await User.findOne({ where: { id: parseInt(userId) } });
+    if (!user) {
+      throw new Error("User doesn't exist");
+    }
+    const mutedUsers =
+      user.muted?.map(async (mutedId: string) => {
+        return await User.findOne({ where: { id: parseInt(mutedId) } });
+      }) || [];
+    return Promise.all(mutedUsers as any);
   }
 
   // unmute user
@@ -440,5 +459,19 @@ export class UserActivityResolver {
     return currentUser;
   }
 
-  // TODO: Deactivate, Filtering, Searching tomorrow.
+  // TODO: Filtering, Searching tomorrow.
+  @Mutation(() => User)
+  async accountDeactivation() {
+    const userId = await redis.get("login");
+    if (userId === null) {
+      throw new Error("You are not logged in");
+    }
+    const user = await User.findOne({ where: { id: parseInt(userId) } });
+    if (!user) {
+      throw new Error("User not found");
+    }
+    await User.update({ id: parseInt(userId) }, { deactivated: true });
+    await redis.del("login");
+    return user;
+  }
 }

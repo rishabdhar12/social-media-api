@@ -1,5 +1,5 @@
 import { Arg, Mutation, Resolver, Query } from "type-graphql";
-import { User } from "../entities/User";
+import { User } from "../../entities/User";
 import argon2 from "argon2";
 import Redis from "ioredis";
 const redis = new Redis();

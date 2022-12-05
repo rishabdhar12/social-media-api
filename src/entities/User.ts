@@ -78,4 +78,8 @@ export class User extends BaseEntity {
   @Field(() => [String])
   @Column("simple-array", { nullable: true })
   muted?: string[];
+
+  @Field(() => Boolean)
+  @Column({ nullable: true, default: false })
+  deactivated: boolean;
 }
