@@ -1,4 +1,4 @@
-import { User } from "../../entities/User"; 
+import { User } from "../../entities/User";
 import { Mutation, Arg, Query } from "type-graphql";
 import Redis from "ioredis";
 const redis = new Redis();
@@ -163,11 +163,13 @@ export class UserActivityResolver {
       throw new Error("User does not exist");
     }
     const friendRequestsReceived =
-      user.friendRequestsReceived?.map(async (friendRequestsReceivedId: string) => {
-        return await User.findOne({
-          where: { id: parseInt(friendRequestsReceivedId) },
-        });
-      }) || [];
+      user.friendRequestsReceived?.map(
+        async (friendRequestsReceivedId: string) => {
+          return await User.findOne({
+            where: { id: parseInt(friendRequestsReceivedId) },
+          });
+        }
+      ) || [];
 
     return await Promise.all(friendRequestsReceived as any);
   }
@@ -459,7 +461,7 @@ export class UserActivityResolver {
     return currentUser;
   }
 
-  // TODO: Filtering, Searching tomorrow.
+  // deactivate account
   @Mutation(() => User)
   async accountDeactivation() {
     const userId = await redis.get("login");

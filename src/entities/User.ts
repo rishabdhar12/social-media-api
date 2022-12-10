@@ -6,7 +6,9 @@ import {
   Entity,
   BaseEntity,
   PrimaryGeneratedColumn,
+  OneToMany,
 } from "typeorm";
+import {Post} from "./Post";
 
 @ObjectType()
 @Entity()
@@ -82,4 +84,8 @@ export class User extends BaseEntity {
   @Field(() => Boolean)
   @Column({ nullable: true, default: false })
   deactivated: boolean;
+  
+  @Field(() => [Post])
+  @OneToMany(() => Post, (post) => post.creatorId)
+  posts: Post[];
 }

@@ -12,6 +12,8 @@ import connectRedis from "connect-redis";
 import session from "express-session";
 import Redis from "ioredis";
 import { __prod__ } from "./constants";
+import { Post } from "./entities/Post";
+import { PostResolver } from "./resolvers/post/post";
 
 const main = async () => {
   const AppDataSource = new DataSource({
@@ -23,7 +25,7 @@ const main = async () => {
     database: "social-media",
     synchronize: true,
     logging: true,
-    entities: [User],
+    entities: [User, Post],
   });
 
   AppDataSource.initialize()
@@ -61,7 +63,12 @@ const main = async () => {
   // type graphql schema
   const apolloServer = new ApolloServer({
     schema: await buildSchema({
-      resolvers: [UserAuthResolver, UserResolver, UserActivityResolver],
+      resolvers: [
+        UserAuthResolver,
+        UserResolver,
+        UserActivityResolver,
+        PostResolver,
+      ],
       validate: false,
     }),
     context: ({ req, res }): MyContext => ({
