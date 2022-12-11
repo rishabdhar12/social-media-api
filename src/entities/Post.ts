@@ -10,7 +10,7 @@ import {
   // OneToMany,
 } from "typeorm";
 import { User } from "./User";
-// import { Photo } from "./Post_Image";
+import { Comment } from "./Comment";
 
 @ObjectType()
 @Entity()
@@ -45,6 +45,10 @@ export class Post extends BaseEntity {
   @ManyToOne(() => User, (user) => user.posts)
   creatorId?: User;
 
+  @Field(() => Comment)
+  @ManyToOne(() => Comment, (comment) => comment.id)
+  comment?: Comment;
+
   @Field(() => Number)
   @Column({ nullable: true, default: 0 })
   totalLikes?: number;
@@ -71,5 +75,10 @@ export class Post extends BaseEntity {
   @Field(() => [String])
   @Column("simple-array", { nullable: true })
   taggedUsers?: string[];
+
+  // reported by
+  @Field(() => [String])
+  @Column("simple-array", { nullable: true })
+  reportedBy?: string[];
 }
   

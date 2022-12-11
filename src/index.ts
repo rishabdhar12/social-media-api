@@ -7,6 +7,7 @@ import { UserResolver } from "./resolvers/user/user";
 import { UserActivityResolver } from "./resolvers/user/user_activity";
 import { DataSource } from "typeorm";
 import { User } from "./entities/User";
+import { Comment } from "./entities/Comment";
 
 import connectRedis from "connect-redis";
 import session from "express-session";
@@ -25,7 +26,7 @@ const main = async () => {
     database: "social-media",
     synchronize: true,
     logging: true,
-    entities: [User, Post],
+    entities: [User, Post, Comment],
   });
 
   AppDataSource.initialize()
